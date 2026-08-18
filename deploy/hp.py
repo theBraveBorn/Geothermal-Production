@@ -30,16 +30,39 @@ app_mode = st.sidebar.radio(
 if app_mode == "Heat Pump Analysis":
     refrigerant = st.sidebar.selectbox(
         "Select Refrigerant",
-        ["R744","R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
+        ["R744", "R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
         index=0
     )
 
-    # Temperature limits based on refrigerant
-    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
-    t_cond_c = st.sidebar.slider("Condensing Temperature (°C)", 25.0, 75.0, 45.0, 1.0)
+    # Obtain critical temperature dynamically
+    T_crit_C = PropsSI('Tcrit', refrigerant) - 273.15
 
+    # Temperature sliders
+    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
+    
+    # Adjust default slider max if fluid critical temp is low (e.g. CO2)
+    max_slider_cond = min(75.0, float(np.floor(T_crit_C - 0.5)))
+    default_cond = min(45.0, max_slider_cond - 2.0)
+    
+    t_cond_c = st.sidebar.slider(
+        "Condensing Temperature (°C)", 
+        min_value=10.0, 
+        max_value=75.0, 
+        value=max(10.0, default_cond), 
+        step=1.0
+    )
+
+    # Validations
     if t_evap_c >= t_cond_c:
         st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
+        st.stop()
+
+    if t_cond_c >= T_crit_C:
+        st.sidebar.error(
+            f"❌ **{refrigerant} Critical Temperature Error**\n\n"
+            f"Selected Condensing Temp ({t_cond_c}°C) exceeds the critical temperature of {refrigerant} ({T_crit_C:.2f}°C).\n"
+            f"Please reduce the condensing temperature below {T_crit_C:.2f}°C for subcritical cycle analysis."
+        )
         st.stop()
 
     superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 5.0, 0.5)
