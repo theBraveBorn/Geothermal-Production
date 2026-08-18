@@ -18,8 +18,6 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exhanger Analysis")
-st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
 
 # Sidebar Controls
 st.sidebar.header("Navigation")
@@ -28,6 +26,9 @@ app_mode = st.sidebar.radio(
     ["Heat Pump Analysis", "Coaxial BHE", "System Monitor (Coming Soon)"]
 )
 if app_mode == "Heat Pump Analysis":
+    st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exhanger Analysis")
+    st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
+    
     refrigerant = st.sidebar.selectbox(
         "Select Refrigerant",
         ["R744", "R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
