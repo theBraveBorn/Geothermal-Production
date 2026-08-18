@@ -3,3 +3,4 @@ CoolProp
 plotly
 pandas
 numpy
+scipy
