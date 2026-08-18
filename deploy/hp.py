@@ -30,7 +30,7 @@ app_mode = st.sidebar.radio(
 if app_mode == "Heat Pump Analysis":
     refrigerant = st.sidebar.selectbox(
         "Select Refrigerant",
-        ["R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
+        ["R747","R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
         index=0
     )
 
