@@ -58,14 +58,6 @@ if app_mode == "Heat Pump Analysis":
         st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
         st.stop()
 
-    if t_cond_c >= T_crit_C:
-        st.sidebar.error(
-            f"❌ **{refrigerant} Critical Temperature Error**\n\n"
-            f"Selected Condensing Temp ({t_cond_c}°C) exceeds the critical temperature of {refrigerant} ({T_crit_C:.2f}°C).\n"
-            f"Please reduce the condensing temperature below {T_crit_C:.2f}°C for subcritical cycle analysis."
-        )
-        st.stop()
-
     superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 5.0, 0.5)
     subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 3.0, 0.5)
     eta_is = st.sidebar.slider("Compressor Isentropic Efficiency (%)", 50, 100, 75, 1) / 100.0
@@ -82,29 +74,56 @@ if app_mode == "Heat Pump Analysis":
         # Convert temperatures to Kelvin
         T_evap_K = t_evap + 273.15
         T_cond_K = t_cond + 273.15
-
-        # Pressures (Pa)
+    
+        # Fetch Critical Point limits for the selected refrigerant
+        T_crit_K = PropsSI('Tcrit', ref)
+        P_crit_Pa = PropsSI('Pcrit', ref)
+    
+        # 1. Evaporator (Low Pressure side - assumed as always subcritical)
         P_evap = PropsSI('P', 'T', T_evap_K, 'Q', 1, ref)
-        P_cond = PropsSI('P', 'T', T_cond_K, 'Q', 0, ref)
-
-        # Point 1: Compressor Inlet (Evaporator Outlet with Superheat)
         T1_K = T_evap_K + sh
-        h1 = PropsSI('H', 'P', P_evap, 'T', T1_K, ref)  # J/kg
-        s1 = PropsSI('S', 'P', P_evap, 'T', T1_K, ref)  # J/kg-K
-
+    
+        # Point 1: Compressor Inlet
+        # If Superheat is 0, explicitly use Q=1 to avoid ambiguous phase error
+        if sh < 1e-4:
+            h1 = PropsSI('H', 'P', P_evap, 'Q', 1, ref)
+            s1 = PropsSI('S', 'P', P_evap, 'Q', 1, ref)
+        else:
+            h1 = PropsSI('H', 'P', P_evap, 'T', T1_K, ref)
+            s1 = PropsSI('S', 'P', P_evap, 'T', T1_K, ref)
+    
+        # 2. High Pressure Side: Check for Transcritical mode
+        is_transcritical = T_cond_K >= (T_crit_K - 0.1)
+    
+        if is_transcritical:
+            # Transcritical mode (Gas Cooling)
+            delta_T = T_cond_K - T_crit_K + 0.1
+            P_cond = P_crit_Pa + (delta_T * 150000) 
+            T3_K = T_cond_K - sc
+            
+            # P and T decoupled (above dome)
+            h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
+        else:
+            # Subcritical mode (Standard Condensation)
+            P_cond = PropsSI('P', 'T', T_cond_K, 'Q', 0, ref)
+            T3_K = T_cond_K - sc
+            
+            # Point 3: Condenser Outlet
+            # If Subcooling is 0, explicitly use Q=0 to avoid ambiguous phase error
+            if sc < 1e-4:
+                h3 = PropsSI('H', 'P', P_cond, 'Q', 0, ref)
+            else:
+                h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
+    
         # Point 2s: Ideal Compressor Outlet
         h2s = PropsSI('H', 'P', P_cond, 'S', s1, ref)
-
+    
         # Point 2: Actual Compressor Outlet
         h2 = h1 + (h2s - h1) / eff_is
-
-        # Point 3: Condenser Outlet (with Subcooling)
-        T3_K = T_cond_K - sc
-        h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
-
+    
         # Point 4: Expansion Valve Outlet (Isenthalpic Expansion)
         h4 = h3
-
+    
         return {
             'P_evap_bar': P_evap / 1e5,
             'P_cond_bar': P_cond / 1e5,
@@ -114,7 +133,8 @@ if app_mode == "Heat Pump Analysis":
             'h4_kj': h4 / 1000,
             'q_cond_kj': (h2 - h3) / 1000,  # Specific heating effect (kJ/kg)
             'q_evap_kj': (h1 - h4) / 1000,  # Specific cooling effect (kJ/kg)
-            'w_comp_kj': (h2 - h1) / 1000   # Specific compressor work (kJ/kg)
+            'w_comp_kj': (h2 - h1) / 1000,  # Specific compressor work (kJ/kg)
+            'is_transcritical': is_transcritical
         }
 
 
