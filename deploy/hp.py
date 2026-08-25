@@ -161,10 +161,12 @@ if app_mode == "Heat Pump Analysis":
     with tab1:
         # 1. Build Saturation Dome Data
         T_crit_K = PropsSI('Tcrit', refrigerant)
+        P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
+        h_crit_kj = PropsSI('H', 'P', P_crit_bar * 1e5, 'Q', 0, refrigerant) / 1000
         T_min_K = PropsSI('Tmin', refrigerant)
     
-        # Generate saturation points up to near critical temperature
-        T_sat_range = np.linspace(max(T_min_K + 1, 220), T_crit_K - 0.5, 120)
+        # Generate saturation points up close to critical temperature
+        T_sat_range = np.linspace(max(T_min_K + 1, 220), T_crit_K - 0.05, 200)
     
         h_fluid = []
         h_gas = []
@@ -178,17 +180,23 @@ if app_mode == "Heat Pump Analysis":
             except:
                 pass
 
+        # Append critical point to close the apex of the dome
+        h_fluid.append(h_crit_kj)
+        h_gas.append(h_crit_kj)
+        p_sat_fluid = p_sat + [P_crit_bar]
+        p_sat_gas = p_sat + [P_crit_bar]
+
         fig = go.Figure()
 
         # Plot Liquid Saturation Line
         fig.add_trace(go.Scatter(
-            x=h_fluid, y=p_sat, mode='lines',
+            x=h_fluid, y=p_sat_fluid, mode='lines',
             name='Saturated Liquid', line=dict(color='blue', width=2)
         ))
 
         # Plot Vapor Saturation Line
         fig.add_trace(go.Scatter(
-            x=h_gas, y=p_sat, mode='lines',
+            x=h_gas, y=p_sat_gas, mode='lines',
             name='Saturated Vapor', line=dict(color='red', width=2)
         ))
 
