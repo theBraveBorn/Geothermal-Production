@@ -1,9 +1,9 @@
 # Lab Heat Pump Control & Data Acquisition System with Borehole Heat Exchanger 
-# Institute of Subsurface Engineering (TU Clausthal) Initiative
 
-A real-time monitoring, control, and data logging application for lab-scale heat pump test benches, powered by **Streamlit** and Python. [IN DEVELOPMENT]
+A real-time monitoring, control, and data logging application for lab-scale heat pump test benches, powered by **Streamlit** and Python. **[IN DEVELOPMENT]**
+Institute of Subsurface Engineering (TU Clausthal) Initiative
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://bhe-hp.streamlit.app)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
