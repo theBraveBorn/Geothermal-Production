@@ -13,10 +13,10 @@ An initiative by Institute of Subsurface Engineering (TU Clausthal).
 
 This repository will contain the software suite used to interface with the laboratory heat pump setup. It bridges hardware data acquisition (DAQ) units with an intuitive web UI built using Streamlit. 
 
-Researchers can adjust operational parameters, monitor thermodynamic cycles in real time (e.g., $P$- $h$ diagrams), and automatically log high-frequency test data.
+Researchers can adjust operational parameters, monitor thermodynamic cycles in real time (e.g., $P$ - $h$ diagrams), and automatically log high-frequency test data.
 
 ### Key Features
 * **Real-Time Telemetry:** Live plotting of temperature, pressure, mass flow rate, and power consumption.
-* **Thermodynamic Modeling:** Dynamic $P$-$h$ and $T$-$s$ diagram generation using `CoolProp`.
+* **Thermodynamic Modeling:** Dynamic $P$ - $h$ and $T$ - $s$ diagram generation using `CoolProp`.
 * **Automated Logging:** Export standardized `.csv` test runs with experiment metadata.
 * **Safety Protocols:** Automatic threshold monitoring with hardware shutdown alerts.
