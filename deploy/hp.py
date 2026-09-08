@@ -27,7 +27,7 @@ app_mode = st.sidebar.radio(
 )
 st.sidebar.markdown("---")
 if app_mode == "Heat Pump Analysis":
-    st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exhanger Analysis")
+    st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exchanger Analysis")
     st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
     
     REFRIGERANT_NAMES = {"Tetrafluoroethane (HFC-134a)" : "R134a",
