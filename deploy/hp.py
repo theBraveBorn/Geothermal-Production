@@ -71,8 +71,6 @@ if app_mode == "Heat Pump Analysis":
         p_gc = None
         
     # Temperature sliders
-    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
-    
     # Adjust default slider max if fluid critical temp is low (e.g. CO2)
     max_slider_cond = min(75.0, float(np.floor(T_crit_C - 0.5)))
     default_cond = min(45.0, max_slider_cond - 2.0)
