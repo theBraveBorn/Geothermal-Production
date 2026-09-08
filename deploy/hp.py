@@ -25,19 +25,51 @@ app_mode = st.sidebar.radio(
     "Select Feature",
     ["Heat Pump Analysis", "Coaxial BHE", "System Monitor (Coming Soon)"]
 )
+st.sidebar.markdown("---")
 if app_mode == "Heat Pump Analysis":
     st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exhanger Analysis")
     st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
     
+    REFRIGERANT_NAMES = {"Tetrafluoroethane (HFC-134a)" : "R134a",
+    "Blend of R-32 and R-125 (50%/50%)" : "R410A",
+    "Difluoromethane (HFC-32)": "R32",
+    "Propane": "R290",
+    "2,3,3,3-Tetrafluoropropene": "R1234yf",
+    "Ammonia": "R717",
+	"Carbon Dioxide": "R744"}
+    
     refrigerant = st.sidebar.selectbox(
         "Select Refrigerant",
-        ["R744", "R134a", "R410A", "R32", "R290", "R1234yf", "R717"],
+        ["Carbon Dioxide", "Ammonia", "Blend of R-32 and R-125 (50%/50%)", "Difluoromethane (HFC-32)", 
+         "Propane", "2,3,3,3-Tetrafluoropropene"],
         index=0
     )
+    refrigerant = REFRIGERANT_NAMES[refrigerant]
 
     # Obtain critical temperature dynamically
     T_crit_C = PropsSI('Tcrit', refrigerant) - 273.15
+    P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
+    st.sidebar.markdown(f"**Critical Point:** {T_crit_C:.2f} °C | {P_crit_bar:.2f} bar")
 
+    # Transcritical option
+    is_transcritical = st.sidebar.checkbox("Enable Transcritical Analysis")
+    if is_transcritical:
+        st.sidebar.info("Gas Cooling enabled, please input Compressor discharge state")
+        t_gc_in = st.sidebar.slider("Compressor Discharge Temperature (°C)",
+                                    min_value=round(T_crit_C)+0.0, 
+                                    max_value=round(T_crit_C) + 50.0, 
+                                    value=T_crit_C + 25.0, 
+                                    step=1.0)
+        p_gc = st.sidebar.slider("Compressor Discharge Pressure (bar)",
+                                    min_value=round(P_crit_bar) + 0.0, 
+                                    max_value=round(P_crit_bar)+50.0, 
+                                    value=P_crit_bar+10, 
+                                    step=1.0)
+        
+    else:
+        t_gc_in = None
+        p_gc = None
+        
     # Temperature sliders
     t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
     
@@ -46,23 +78,32 @@ if app_mode == "Heat Pump Analysis":
     default_cond = min(45.0, max_slider_cond - 2.0)
     
     t_cond_c = st.sidebar.slider(
-        "Condensing Temperature (°C)", 
-        min_value=10.0, 
-        max_value=75.0, 
-        value=max(10.0, default_cond), 
-        step=1.0
-    )
+    "Condensing Temperature (°C)" if not is_transcritical else "Gas Cooler Outlet Temperature (°C)", 
+    min_value=-10.0, 
+    max_value=round(T_crit_C) - 0.5 if not is_transcritical else round(T_crit_C) + 50.0, 
+    value=max(10.0, default_cond), 
+    step=1.0
+)
+
+    if is_transcritical:
+        st.sidebar.markdown("---")
+    
+    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
 
     # Validations
     if t_evap_c >= t_cond_c:
         st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
         st.stop()
 
-    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 5.0, 0.5)
-    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 3.0, 0.5)
+    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 0.0, 0.5)
+    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 0.0, 0.5)
+
+    st.sidebar.markdown("---")
+    
     eta_is = st.sidebar.slider("Compressor Isentropic Efficiency (%)", 50, 100, 75, 1) / 100.0
     heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
 
+    st.sidebar.markdown("---")
     st.sidebar.header("2. Sensitivity Analysis Mode")
     sens_var = st.sidebar.selectbox(
         "Vary Parameter for Sensitivity Chart",
@@ -70,7 +111,7 @@ if app_mode == "Heat Pump Analysis":
     )
 
     # Thermodynamic Calculation Helper
-    def get_cycle_points(ref, t_evap, t_cond, sh, sc, eff_is):
+    def get_cycle_points(ref, t_evap, t_cond, sh, sc, eff_is, trans = is_transcritical, p_gc=p_gc, t_gc=t_gc_in):
         # Convert temperatures to Kelvin
         T_evap_K = t_evap + 273.15
         T_cond_K = t_cond + 273.15
@@ -95,10 +136,9 @@ if app_mode == "Heat Pump Analysis":
         # 2. High Pressure Side: Check for Transcritical mode
         is_transcritical = T_cond_K >= (T_crit_K - 0.1)
     
-        if is_transcritical:
+        if trans:
             # Transcritical mode (Gas Cooling)
-            delta_T = T_cond_K - T_crit_K + 0.1
-            P_cond = P_crit_Pa + (delta_T * 150000) 
+            P_cond = p_gc * 1e5 
             T3_K = T_cond_K - sc
             
             # P and T decoupled (above dome)
@@ -134,7 +174,6 @@ if app_mode == "Heat Pump Analysis":
             'q_cond_kj': (h2 - h3) / 1000,  # Specific heating effect (kJ/kg)
             'q_evap_kj': (h1 - h4) / 1000,  # Specific cooling effect (kJ/kg)
             'w_comp_kj': (h2 - h1) / 1000,  # Specific compressor work (kJ/kg)
-            'is_transcritical': is_transcritical
         }
 
 
@@ -149,14 +188,23 @@ if app_mode == "Heat Pump Analysis":
     compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
 
     # Display Metrics
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Heating COP", f"{cop_heating:.2f}")
+    cop_threshold = 10.0
+
+    # Conditional help text
+    help_text = (
+        "⚠️ **High COP Detected:** The pressure ratio (lift) is very small, "
+        "resulting in low compressor work. Verify your evaporator and "
+        "discharge pressure inputs."
+        if cop_heating > cop_threshold
+        else "Standard calculated Coefficient of Performance for heating."
+    )
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Heating COP", f"{cop_heating:.2f}", help=help_text)
     col2.metric("Compressor Power", f"{compressor_power_kw:.2f} kW")
     col3.metric("Mass Flow Rate", f"{mass_flow_rate * 3600:.1f} kg/h")
-    col4.metric("Specific Work", f"{cycle['w_comp_kj']:.1f} kJ/kg")
 
     # Tabs Layout
-    tab1, tab2 = st.tabs(["📉 P-h Diagram", "📊 Sensitivity Analysis"])
+    tab1, tab2, tab3 = st.tabs(["📉 P-h Diagram", "📊 Sensitivity Analysis", "🧮 State Points Table"])
 
     with tab1:
         # 1. Build Saturation Dome Data
@@ -232,14 +280,14 @@ if app_mode == "Heat Pump Analysis":
     
         # Generate range based on selection
         if sens_var == "Evaporating Temperature":
-            x_vals = np.linspace(-30, 15, 30)
+            x_vals = np.linspace(-t_cond_c, t_cond_c, 30)
             cops = [get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
                     get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
                     for x in x_vals if x < t_cond_c]
             x_label = "Evaporating Temperature (°C)"
 
         elif sens_var == "Condensing Temperature":
-            x_vals = np.linspace(30, 70, 30)
+            x_vals = np.linspace(T_crit_C, T_crit_C + 50, 30) if is_transcritical else np.linspace(0, T_crit_C -1, 30)
             cops = [get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
                     get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
                     for x in x_vals if x > t_evap_c]
@@ -275,6 +323,15 @@ if app_mode == "Heat Pump Analysis":
         )
     
         st.plotly_chart(sens_fig, use_container_width=True)
+
+    with tab3:
+        st.subheader("Thermodynamic State Points")
+        state_data = pd.DataFrame({
+            "State Point": ["1 (Compressor In)", "2 (Compressor Out)", "3 (Expansion In)", "4 (Evaporator In)"],
+            "Pressure (bar)": [cycle['P_evap_bar'], cycle['P_cond_bar'], cycle['P_cond_bar'], cycle['P_evap_bar']],
+            "Enthalpy (kJ/kg)": [cycle['h1_kj'], cycle['h2_kj'], cycle['h3_kj'], cycle['h4_kj']]
+        })
+        st.dataframe(state_data.style.format({"Pressure (bar)": "{:.2f}", "Enthalpy (kJ/kg)": "{:.2f}"}))
 
 
 # CBHE Implementation
