@@ -486,7 +486,7 @@ elif app_mode == "Heat Pump Analysis":
         last_T_out = res['Tout'][-1]
         last_Q_evap = res['Q_kW'][-1]  # Heat extracted from the ground
 	   
-        pinch_dt = st.sidebar.slider("Evaporator Approach Temp ΔT (K)", 0.0, 20.0, 4.0, 0.5)
+        pinch_dt = st.sidebar.slider("Evaporator Approach Temp ΔT (K)", 0.0, 20.0, 16.0, 0.5)
         t_evap_c = last_T_out - pinch_dt
 	   
         st.sidebar.success(f"**BHE Input Active:**\n"
