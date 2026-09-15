@@ -475,28 +475,28 @@ elif app_mode == "Heat Pump Analysis":
 
 	
 	# Source driven approach (constant inlet cbhe inlet)
-	use_cbhe_data = False
-	if st.session_state.get("sim_run_completed"):
-	   st.sidebar.markdown("### BHE Integration")
-	   use_cbhe_data = st.sidebar.checkbox("Use Transient CBHE Results", value=True)
+    use_cbhe_data = False
+    if st.session_state.get("sim_run_completed"):
+        st.sidebar.markdown("### BHE Integration")
+        use_cbhe_data = st.sidebar.checkbox("Use Transient CBHE Results", value=True)
 	
-	if use_cbhe_data:
+    if use_cbhe_data:
 	   # Retrieve the final snapshot from the CBHE run
-	   res = st.session_state.sim_results
-	   last_T_out = res['Tout'][-1]
-	   last_Q_evap = res['Q_kW'][-1]  # Heat extracted from the ground
+        res = st.session_state.sim_results
+        last_T_out = res['Tout'][-1]
+        last_Q_evap = res['Q_kW'][-1]  # Heat extracted from the ground
 	   
-	   pinch_dt = st.sidebar.slider("Evaporator Approach Temp ΔT (K)", 0.0, 20.0, 4.0, 0.5)
-	   t_evap_c = last_T_out - pinch_dt
+        pinch_dt = st.sidebar.slider("Evaporator Approach Temp ΔT (K)", 0.0, 20.0, 4.0, 0.5)
+        t_evap_c = last_T_out - pinch_dt
 	   
-	   st.sidebar.success(f"**BHE Input Active:**\n"
+        st.sidebar.success(f"**BHE Input Active:**\n"
 						  f"- BHE Outlet: {last_T_out:.2f} °C\n"
 						  f"- Evaporating at: {t_evap_c:.2f} °C\n"
 						  f"- Source Heat Available: {last_Q_evap:.2f} kW")
-	else:
-	   t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
-	   heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
-
+    else:
+        t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
+        heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
+		
     # Validations
     if t_evap_c >= t_cond_c:
         st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
@@ -589,16 +589,16 @@ elif app_mode == "Heat Pump Analysis":
 
     # Key Performance Indicators
     if use_cbhe_data:
-	    mass_flow_rate = last_Q_evap / cycle['q_evap_kj']  # kg/s
-	    compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
-	    heating_capacity_kw = mass_flow_rate * cycle['q_cond_kj']
-	else:
-	    mass_flow_rate = heating_capacity_kw / cycle['q_cond_kj']  # kg/s
-	    compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
-	    last_Q_evap = mass_flow_rate * cycle['q_evap_kj']
+        mass_flow_rate = last_Q_evap / cycle['q_evap_kj']  # kg/s
+        compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
+        heating_capacity_kw = mass_flow_rate * cycle['q_cond_kj']
+    else:
+        mass_flow_rate = heating_capacity_kw / cycle['q_cond_kj']  # kg/s
+        compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
+        last_Q_evap = mass_flow_rate * cycle['q_evap_kj']
 	
-	cop_heating = cycle['q_cond_kj'] / cycle['w_comp_kj']
-	cop_cooling = cycle['q_evap_kj'] / cycle['w_comp_kj']
+    cop_heating = cycle['q_cond_kj'] / cycle['w_comp_kj']
+    cop_cooling = cycle['q_evap_kj'] / cycle['w_comp_kj']
 
     # Display Metrics
     cop_threshold = 10.0
