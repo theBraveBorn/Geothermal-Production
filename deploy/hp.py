@@ -133,8 +133,8 @@ if app_mode == "Coaxial BHE":
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Vertical Depth", f"{H_val * np.cos(np.radians(alpha_deg)):.1f} m", f"Axial: {H_val:.0f} m")
         m2.metric("Inner / Outer Annulus Ratio", f"{(r1o_mm / r2i_mm):.2f}", f"Clearance: {(r2i_mm - r1o_mm):.1f} mm")
-        m3.metric("Total CAPEX", f"${cost_total:,.2f}")
-        m4.metric("Unit Cost per Meter", f"${cost_per_m:.2f} / m")
+        m3.metric("Total CAPEX", f"€{cost_total:,.2f}")
+        m4.metric("Unit Cost per Meter", f"€{cost_per_m:.2f} / m")
 
         # Visualizations: Donut Chart & Schematics
         vcol1, vcol2 = st.columns([1, 1.2])
