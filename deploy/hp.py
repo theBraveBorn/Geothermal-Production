@@ -121,7 +121,7 @@ if app_mode == "Coaxial BHE":
             c_inner = cost_col2.number_input("Inner Pipe (€/m)", 5.0, 300.0, 45.0 if "VIP" in inner_mat else 15.0)
             c_outer = cost_col3.number_input("Outer Pipe (€/m)", 10.0, 400.0, 35.0)
             c_grout = cost_col4.number_input("Grout (€/m)", 5.0, 100.0, 20.0)
-            c_mob = st.number_input("Mobilization & Installation Fixed Cost ($)", 0.0, 50000.0, 5000.0, step=500.0)
+            c_mob = st.number_input("Mobilization & Installation Fixed Cost (€)", 0.0, 50000.0, 5000.0, step=500.0)
 
         cost_drilling = H_val * c_drill
         cost_inner_pipe = H_val * c_inner
