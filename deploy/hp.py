@@ -615,7 +615,7 @@ elif app_mode == "Heat Pump Analysis":
     col1.metric("Heating COP", f"{cop_heating:.2f}", help=help_text)
     col2.metric("Compressor Power", f"{compressor_power_kw:.2f} kW")
     col3.metric("Mass Flow Rate", f"{mass_flow_rate * 3600:.1f} kg/h")
-	ol4.metric("Extracted Ground Heat", f"{last_Q_evap:.2f} kW")
+	col4.metric("Extracted Ground Heat", f"{last_Q_evap:.2f} kW")
 
     # Tabs Layout
     tab1, tab2, tab3 = st.tabs(["📉 P-h Diagram", "📊 Sensitivity Analysis", "🧮 State Points Table"])
