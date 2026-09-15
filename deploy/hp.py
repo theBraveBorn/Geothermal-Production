@@ -687,6 +687,9 @@ elif app_mode == "Heat Pump Analysis":
             legend=dict(x=0.02, y=0.98)
         )
 
+		fig.update_xaxes(title_font=dict(color="black", size=16), tickfont=dict(color="black",size=14))
+		fig.update_yaxes(title_font=dict(color="black", size=16), tickfont=dict(color="black",size=14))
+
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
