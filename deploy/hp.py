@@ -30,7 +30,7 @@ st.sidebar.markdown("---")
 # CBHE Implementation
 
 if app_mode == "Coaxial BHE":
-    st.title("♨️ Coaxial Borehole Heat Exchanger (CBHE) Engine")
+    st.title("♨️ Coaxial Borehole Heat Exchanger (CBHE) Simulator")
     st.markdown(
         "Design, cost, and dynamically simulate coaxial geothermal deep borehole heat exchangers "
         "using rigorous semi-analytical thermal models and transient line-source superposition."
@@ -473,6 +473,7 @@ elif app_mode == "Heat Pump Analysis":
     if is_transcritical:
         st.sidebar.markdown("---")
 
+	
 	# Source driven approach (constant inlet cbhe inlet)
 	use_cbhe_data = False
 	if st.session_state.get("sim_run_completed"):
