@@ -23,318 +23,13 @@ st.set_page_config(
 st.sidebar.header("Navigation")
 app_mode = st.sidebar.radio(
     "Select Feature",
-    ["Heat Pump Analysis", "Coaxial BHE", "System Monitor (Coming Soon)"]
+    [ "Coaxial BHE", "Heat Pump Analysis","System Monitor (Coming Soon)"]
 )
 st.sidebar.markdown("---")
-if app_mode == "Heat Pump Analysis":
-    st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exchanger Analysis")
-    st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
-    
-    REFRIGERANT_NAMES = {"Tetrafluoroethane (HFC-134a)" : "R134a",
-    "Blend of R-32 and R-125 (50%/50%)" : "R410A",
-    "Difluoromethane (HFC-32)": "R32",
-    "Propane": "R290",
-    "2,3,3,3-Tetrafluoropropene": "R1234yf",
-    "Ammonia": "R717",
-	"Carbon Dioxide": "R744"}
-    
-    refrigerant = st.sidebar.selectbox(
-        "Select Refrigerant",
-        ["Carbon Dioxide", "Ammonia", "Blend of R-32 and R-125 (50%/50%)", "Difluoromethane (HFC-32)", 
-         "Propane", "2,3,3,3-Tetrafluoropropene"],
-        index=0
-    )
-    refrigerant = REFRIGERANT_NAMES[refrigerant]
-
-    # Obtain critical temperature dynamically
-    T_crit_C = PropsSI('Tcrit', refrigerant) - 273.15
-    P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
-    st.sidebar.markdown(f"**Critical Point:** {T_crit_C:.2f} °C | {P_crit_bar:.2f} bar")
-
-    # Transcritical option
-    is_transcritical = st.sidebar.checkbox("Enable Transcritical Analysis")
-    if is_transcritical:
-        st.sidebar.info("Gas Cooling enabled, please input Compressor discharge state")
-        t_gc_in = st.sidebar.slider("Compressor Discharge Temperature (°C)",
-                                    min_value=round(T_crit_C)+0.0, 
-                                    max_value=round(T_crit_C) + 50.0, 
-                                    value=T_crit_C + 25.0, 
-                                    step=1.0)
-        p_gc = st.sidebar.slider("Compressor Discharge Pressure (bar)",
-                                    min_value=round(P_crit_bar) + 0.0, 
-                                    max_value=round(P_crit_bar)+50.0, 
-                                    value=P_crit_bar+10, 
-                                    step=1.0)
-        
-    else:
-        t_gc_in = None
-        p_gc = None
-        
-    # Temperature sliders
-    # Adjust default slider max if fluid critical temp is low (e.g. CO2)
-    max_slider_cond = min(75.0, float(np.floor(T_crit_C - 0.5)))
-    default_cond = min(45.0, max_slider_cond - 2.0)
-    
-    t_cond_c = st.sidebar.slider(
-    "Condensing Temperature (°C)" if not is_transcritical else "Gas Cooler Outlet Temperature (°C)", 
-    min_value=-10.0, 
-    max_value=round(T_crit_C) - 0.5 if not is_transcritical else round(T_crit_C) + 50.0, 
-    value=max(10.0, default_cond), 
-    step=1.0
-)
-
-    if is_transcritical:
-        st.sidebar.markdown("---")
-    
-    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
-
-    # Validations
-    if t_evap_c >= t_cond_c:
-        st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
-        st.stop()
-
-    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 0.0, 0.5)
-    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 0.0, 0.5)
-
-    st.sidebar.markdown("---")
-    
-    eta_is = st.sidebar.slider("Compressor Isentropic Efficiency (%)", 50, 100, 75, 1) / 100.0
-    heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
-
-    st.sidebar.markdown("---")
-    st.sidebar.header("2. Sensitivity Analysis Mode")
-    sens_var = st.sidebar.selectbox(
-        "Vary Parameter for Sensitivity Chart",
-        ["Evaporating Temperature", "Condensing Temperature", "Compressor Efficiency", "Superheating"]
-    )
-
-    # Thermodynamic Calculation Helper
-    def get_cycle_points(ref, t_evap, t_cond, sh, sc, eff_is, trans = is_transcritical, p_gc=p_gc, t_gc=t_gc_in):
-        # Convert temperatures to Kelvin
-        T_evap_K = t_evap + 273.15
-        T_cond_K = t_cond + 273.15
-    
-        # Fetch Critical Point limits for the selected refrigerant
-        T_crit_K = PropsSI('Tcrit', ref)
-        P_crit_Pa = PropsSI('Pcrit', ref)
-    
-        # 1. Evaporator (Low Pressure side - assumed as always subcritical)
-        P_evap = PropsSI('P', 'T', T_evap_K, 'Q', 1, ref)
-        T1_K = T_evap_K + sh
-    
-        # Point 1: Compressor Inlet
-        # If Superheat is 0, explicitly use Q=1 to avoid ambiguous phase error
-        if sh < 1e-4:
-            h1 = PropsSI('H', 'P', P_evap, 'Q', 1, ref)
-            s1 = PropsSI('S', 'P', P_evap, 'Q', 1, ref)
-        else:
-            h1 = PropsSI('H', 'P', P_evap, 'T', T1_K, ref)
-            s1 = PropsSI('S', 'P', P_evap, 'T', T1_K, ref)
-    
-        # 2. High Pressure Side: Check for Transcritical mode
-        is_transcritical = T_cond_K >= (T_crit_K - 0.1)
-    
-        if trans:
-            # Transcritical mode (Gas Cooling)
-            P_cond = p_gc * 1e5 
-            T3_K = T_cond_K - sc
-            
-            # P and T decoupled (above dome)
-            h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
-        else:
-            # Subcritical mode (Standard Condensation)
-            P_cond = PropsSI('P', 'T', T_cond_K, 'Q', 0, ref)
-            T3_K = T_cond_K - sc
-            
-            # Point 3: Condenser Outlet
-            # If Subcooling is 0, explicitly use Q=0 to avoid ambiguous phase error
-            if sc < 1e-4:
-                h3 = PropsSI('H', 'P', P_cond, 'Q', 0, ref)
-            else:
-                h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
-    
-        # Point 2s: Ideal Compressor Outlet
-        h2s = PropsSI('H', 'P', P_cond, 'S', s1, ref)
-    
-        # Point 2: Actual Compressor Outlet
-        h2 = h1 + (h2s - h1) / eff_is
-    
-        # Point 4: Expansion Valve Outlet (Isenthalpic Expansion)
-        h4 = h3
-    
-        return {
-            'P_evap_bar': P_evap / 1e5,
-            'P_cond_bar': P_cond / 1e5,
-            'h1_kj': h1 / 1000,
-            'h2_kj': h2 / 1000,
-            'h3_kj': h3 / 1000,
-            'h4_kj': h4 / 1000,
-            'q_cond_kj': (h2 - h3) / 1000,  # Specific heating effect (kJ/kg)
-            'q_evap_kj': (h1 - h4) / 1000,  # Specific cooling effect (kJ/kg)
-            'w_comp_kj': (h2 - h1) / 1000,  # Specific compressor work (kJ/kg)
-        }
-
-
-
-    # Execute Primary Calculation
-    cycle = get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, eta_is)
-
-    # Key Performance Indicators
-    cop_heating = cycle['q_cond_kj'] / cycle['w_comp_kj']
-    cop_cooling = cycle['q_evap_kj'] / cycle['w_comp_kj']
-    mass_flow_rate = heating_capacity_kw / cycle['q_cond_kj']  # kg/s
-    compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
-
-    # Display Metrics
-    cop_threshold = 10.0
-
-    # Conditional help text
-    help_text = (
-        "⚠️ **High COP Detected:** The pressure ratio (lift) is very small, "
-        "resulting in low compressor work. Verify your evaporator and "
-        "discharge pressure inputs."
-        if cop_heating > cop_threshold
-        else "Standard calculated Coefficient of Performance for heating."
-    )
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Heating COP", f"{cop_heating:.2f}", help=help_text)
-    col2.metric("Compressor Power", f"{compressor_power_kw:.2f} kW")
-    col3.metric("Mass Flow Rate", f"{mass_flow_rate * 3600:.1f} kg/h")
-
-    # Tabs Layout
-    tab1, tab2, tab3 = st.tabs(["📉 P-h Diagram", "📊 Sensitivity Analysis", "🧮 State Points Table"])
-
-    with tab1:
-        # 1. Build Saturation Dome Data
-        T_crit_K = PropsSI('Tcrit', refrigerant)
-        P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
-        h_crit_kj = PropsSI('H', 'P', P_crit_bar * 1e5, 'Q', 0, refrigerant) / 1000
-        T_min_K = PropsSI('Tmin', refrigerant)
-    
-        # Generate saturation points up close to critical temperature
-        T_sat_range = np.linspace(max(T_min_K + 1, 220), T_crit_K - 0.05, 200)
-    
-        h_fluid = []
-        h_gas = []
-        p_sat = []
-    
-        for T_sat in T_sat_range:
-            try:
-                p_sat.append(PropsSI('P', 'T', T_sat, 'Q', 0, refrigerant) / 1e5) # bar
-                h_fluid.append(PropsSI('H', 'T', T_sat, 'Q', 0, refrigerant) / 1000) # kJ/kg
-                h_gas.append(PropsSI('H', 'T', T_sat, 'Q', 1, refrigerant) / 1000)   # kJ/kg
-            except:
-                pass
-
-        # Append critical point to close the apex of the dome
-        h_fluid.append(h_crit_kj)
-        h_gas.append(h_crit_kj)
-        p_sat_fluid = p_sat + [P_crit_bar]
-        p_sat_gas = p_sat + [P_crit_bar]
-
-        fig = go.Figure()
-
-        # Plot Liquid Saturation Line
-        fig.add_trace(go.Scatter(
-            x=h_fluid, y=p_sat_fluid, mode='lines',
-            name='Saturated Liquid', line=dict(color='blue', width=2)
-        ))
-
-        # Plot Vapor Saturation Line
-        fig.add_trace(go.Scatter(
-            x=h_gas, y=p_sat_gas, mode='lines',
-            name='Saturated Vapor', line=dict(color='red', width=2)
-        ))
-
-        # Cycle States Loop (1 -> 2 -> 3 -> 4 -> 1)
-        cycle_h = [cycle['h1_kj'], cycle['h2_kj'], cycle['h3_kj'], cycle['h4_kj'], cycle['h1_kj']]
-        cycle_p = [cycle['P_evap_bar'], cycle['P_cond_bar'], cycle['P_cond_bar'], cycle['P_evap_bar'], cycle['P_evap_bar']]
-
-        # Plot Cycle Trajectory
-        fig.add_trace(go.Scatter(
-            x=cycle_h, y=cycle_p, mode='lines+markers+text',
-            name='Heat Pump Cycle',
-            text=['State 1 (Inlet)', 'State 2 (Outlet)', 'State 3 (Condenser Out)', 'State 4 (Evap In)', ''],
-            textposition='top right',
-            line=dict(color='black', width=3, dash='solid'),
-            marker=dict(size=8, color='black')
-        ))
-
-        # Chart Configuration
-        fig.update_layout(
-            title=f"Pressure-Enthalpy (P-h) Diagram for {refrigerant}",
-            xaxis_title="Enthalpy h (kJ/kg)",
-            yaxis_title="Pressure P (bar, Log Scale)",
-            yaxis_type="log",
-            height=650,
-            hovermode="closest",
-            legend=dict(x=0.02, y=0.98)
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-    with tab2:
-        st.subheader(f"Sensitivity: Heating COP vs {sens_var}")
-    
-        # Generate range based on selection
-        if sens_var == "Evaporating Temperature":
-            x_vals = np.linspace(-t_cond_c, t_cond_c, 30)
-            cops = [get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
-                    get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
-                    for x in x_vals if x < t_cond_c]
-            x_label = "Evaporating Temperature (°C)"
-
-        elif sens_var == "Condensing Temperature":
-            x_vals = np.linspace(T_crit_C, T_crit_C + 50, 30) if is_transcritical else np.linspace(0, T_crit_C -1, 30)
-            cops = [get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
-                    get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
-                    for x in x_vals if x > t_evap_c]
-            x_label = "Condensing Temperature (°C)"
-
-        elif sens_var == "Compressor Efficiency":
-            x_vals = np.linspace(0.5, 0.95, 20)
-            cops = [get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, x)['q_cond_kj'] /
-                    get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, x)['w_comp_kj'] 
-                    for x in x_vals]
-            x_label = "Isentropic Efficiency"
-
-        else:  # Superheating
-            x_vals = np.linspace(0, 20, 20)
-            cops = [get_cycle_points(refrigerant, t_evap_c, t_cond_c, x, subcooling_k, eta_is)['q_cond_kj'] /
-                    get_cycle_points(refrigerant, t_evap_c, t_cond_c, x, subcooling_k, eta_is)['w_comp_kj'] 
-                    for x in x_vals]
-            x_label = "Superheating (K)"
-
-        # Plot Sensitivity Line Chart
-        sens_df = pd.DataFrame({x_label: x_vals[:len(cops)], "Heating COP": cops})
-    
-        sens_fig = go.Figure()
-        sens_fig.add_trace(go.Scatter(
-            x=sens_df[x_label], y=sens_df["Heating COP"],
-            mode='lines+markers', line=dict(color='firebrick', width=3)
-        ))
-        sens_fig.update_layout(
-            title=f"Impact of {sens_var} on Coefficient of Performance (COP)",
-            xaxis_title=x_label,
-            yaxis_title="COP (Heating)",
-            height=500
-        )
-    
-        st.plotly_chart(sens_fig, use_container_width=True)
-
-    with tab3:
-        st.subheader("Thermodynamic State Points")
-        state_data = pd.DataFrame({
-            "State Point": ["1 (Compressor In)", "2 (Compressor Out)", "3 (Expansion In)", "4 (Evaporator In)"],
-            "Pressure (bar)": [cycle['P_evap_bar'], cycle['P_cond_bar'], cycle['P_cond_bar'], cycle['P_evap_bar']],
-            "Enthalpy (kJ/kg)": [cycle['h1_kj'], cycle['h2_kj'], cycle['h3_kj'], cycle['h4_kj']]
-        })
-        st.dataframe(state_data.style.format({"Pressure (bar)": "{:.2f}", "Enthalpy (kJ/kg)": "{:.2f}"}))
-
 
 # CBHE Implementation
 
-elif app_mode == "Coaxial BHE":
+if app_mode == "Coaxial BHE":
     st.title("♨️ Coaxial Borehole Heat Exchanger (CBHE) Engine")
     st.markdown(
         "Design, cost, and dynamically simulate coaxial geothermal deep borehole heat exchangers "
@@ -716,6 +411,315 @@ elif app_mode == "Coaxial BHE":
                     legend=dict(orientation="h", y=-0.2)
                 )
                 st.plotly_chart(fig_hist, use_container_width=True)
+
+
+elif app_mode == "Heat Pump Analysis":
+    st.title(" Heat Pump Cycle & Coaxial Borehole Heat Exchanger Analysis")
+    st.markdown("Interactively analyze heat pump cycles with a Coaxial BHE")
+    
+    REFRIGERANT_NAMES = {"Tetrafluoroethane (HFC-134a)" : "R134a",
+    "Blend of R-32 and R-125 (50%/50%)" : "R410A",
+    "Difluoromethane (HFC-32)": "R32",
+    "Propane": "R290",
+    "2,3,3,3-Tetrafluoropropene": "R1234yf",
+    "Ammonia": "R717",
+	"Carbon Dioxide": "R744"}
+    
+    refrigerant = st.sidebar.selectbox(
+        "Select Refrigerant",
+        ["Carbon Dioxide", "Ammonia", "Blend of R-32 and R-125 (50%/50%)", "Difluoromethane (HFC-32)", 
+         "Propane", "2,3,3,3-Tetrafluoropropene"],
+        index=0
+    )
+    refrigerant = REFRIGERANT_NAMES[refrigerant]
+
+    # Obtain critical temperature dynamically
+    T_crit_C = PropsSI('Tcrit', refrigerant) - 273.15
+    P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
+    st.sidebar.markdown(f"**Critical Point:** {T_crit_C:.2f} °C | {P_crit_bar:.2f} bar")
+
+    # Transcritical option
+    is_transcritical = st.sidebar.checkbox("Enable Transcritical Analysis")
+    if is_transcritical:
+        st.sidebar.info("Gas Cooling enabled, please input Compressor discharge state")
+        t_gc_in = st.sidebar.slider("Compressor Discharge Temperature (°C)",
+                                    min_value=round(T_crit_C)+0.0, 
+                                    max_value=round(T_crit_C) + 50.0, 
+                                    value=T_crit_C + 25.0, 
+                                    step=1.0)
+        p_gc = st.sidebar.slider("Compressor Discharge Pressure (bar)",
+                                    min_value=round(P_crit_bar) + 0.0, 
+                                    max_value=round(P_crit_bar)+50.0, 
+                                    value=P_crit_bar+10, 
+                                    step=1.0)
+        
+    else:
+        t_gc_in = None
+        p_gc = None
+        
+    # Temperature sliders
+    # Adjust default slider max if fluid critical temp is low (e.g. CO2)
+    max_slider_cond = min(75.0, float(np.floor(T_crit_C - 0.5)))
+    default_cond = min(45.0, max_slider_cond - 2.0)
+    
+    t_cond_c = st.sidebar.slider(
+    "Condensing Temperature (°C)" if not is_transcritical else "Gas Cooler Outlet Temperature (°C)", 
+    min_value=-10.0, 
+    max_value=round(T_crit_C) - 0.5 if not is_transcritical else round(T_crit_C) + 50.0, 
+    value=max(10.0, default_cond), 
+    step=1.0
+)
+
+    if is_transcritical:
+        st.sidebar.markdown("---")
+    
+    t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
+
+    # Validations
+    if t_evap_c >= t_cond_c:
+        st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
+        st.stop()
+
+    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 0.0, 0.5)
+    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 0.0, 0.5)
+
+    st.sidebar.markdown("---")
+    
+    eta_is = st.sidebar.slider("Compressor Isentropic Efficiency (%)", 50, 100, 75, 1) / 100.0
+    heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
+
+    st.sidebar.markdown("---")
+    st.sidebar.header("2. Sensitivity Analysis Mode")
+    sens_var = st.sidebar.selectbox(
+        "Vary Parameter for Sensitivity Chart",
+        ["Evaporating Temperature", "Condensing Temperature", "Compressor Efficiency", "Superheating"]
+    )
+
+    # Thermodynamic Calculation Helper
+    def get_cycle_points(ref, t_evap, t_cond, sh, sc, eff_is, trans = is_transcritical, p_gc=p_gc, t_gc=t_gc_in):
+        # Convert temperatures to Kelvin
+        T_evap_K = t_evap + 273.15
+        T_cond_K = t_cond + 273.15
+    
+        # Fetch Critical Point limits for the selected refrigerant
+        T_crit_K = PropsSI('Tcrit', ref)
+        P_crit_Pa = PropsSI('Pcrit', ref)
+    
+        # 1. Evaporator (Low Pressure side - assumed as always subcritical)
+        P_evap = PropsSI('P', 'T', T_evap_K, 'Q', 1, ref)
+        T1_K = T_evap_K + sh
+    
+        # Point 1: Compressor Inlet
+        # If Superheat is 0, explicitly use Q=1 to avoid ambiguous phase error
+        if sh < 1e-4:
+            h1 = PropsSI('H', 'P', P_evap, 'Q', 1, ref)
+            s1 = PropsSI('S', 'P', P_evap, 'Q', 1, ref)
+        else:
+            h1 = PropsSI('H', 'P', P_evap, 'T', T1_K, ref)
+            s1 = PropsSI('S', 'P', P_evap, 'T', T1_K, ref)
+    
+        # 2. High Pressure Side: Check for Transcritical mode
+        is_transcritical = T_cond_K >= (T_crit_K - 0.1)
+    
+        if trans:
+            # Transcritical mode (Gas Cooling)
+            P_cond = p_gc * 1e5 
+            T3_K = T_cond_K - sc
+            
+            # P and T decoupled (above dome)
+            h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
+        else:
+            # Subcritical mode (Standard Condensation)
+            P_cond = PropsSI('P', 'T', T_cond_K, 'Q', 0, ref)
+            T3_K = T_cond_K - sc
+            
+            # Point 3: Condenser Outlet
+            # If Subcooling is 0, explicitly use Q=0 to avoid ambiguous phase error
+            if sc < 1e-4:
+                h3 = PropsSI('H', 'P', P_cond, 'Q', 0, ref)
+            else:
+                h3 = PropsSI('H', 'P', P_cond, 'T', T3_K, ref)
+    
+        # Point 2s: Ideal Compressor Outlet
+        h2s = PropsSI('H', 'P', P_cond, 'S', s1, ref)
+    
+        # Point 2: Actual Compressor Outlet
+        h2 = h1 + (h2s - h1) / eff_is
+    
+        # Point 4: Expansion Valve Outlet (Isenthalpic Expansion)
+        h4 = h3
+    
+        return {
+            'P_evap_bar': P_evap / 1e5,
+            'P_cond_bar': P_cond / 1e5,
+            'h1_kj': h1 / 1000,
+            'h2_kj': h2 / 1000,
+            'h3_kj': h3 / 1000,
+            'h4_kj': h4 / 1000,
+            'q_cond_kj': (h2 - h3) / 1000,  # Specific heating effect (kJ/kg)
+            'q_evap_kj': (h1 - h4) / 1000,  # Specific cooling effect (kJ/kg)
+            'w_comp_kj': (h2 - h1) / 1000,  # Specific compressor work (kJ/kg)
+        }
+
+
+
+    # Execute Primary Calculation
+    cycle = get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, eta_is)
+
+    # Key Performance Indicators
+    cop_heating = cycle['q_cond_kj'] / cycle['w_comp_kj']
+    cop_cooling = cycle['q_evap_kj'] / cycle['w_comp_kj']
+    mass_flow_rate = heating_capacity_kw / cycle['q_cond_kj']  # kg/s
+    compressor_power_kw = mass_flow_rate * cycle['w_comp_kj']
+
+    # Display Metrics
+    cop_threshold = 10.0
+
+    # Conditional help text
+    help_text = (
+        "⚠️ **High COP Detected:** The pressure ratio (lift) is very small, "
+        "resulting in low compressor work. Verify your evaporator and "
+        "discharge pressure inputs."
+        if cop_heating > cop_threshold
+        else "Standard calculated Coefficient of Performance for heating."
+    )
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Heating COP", f"{cop_heating:.2f}", help=help_text)
+    col2.metric("Compressor Power", f"{compressor_power_kw:.2f} kW")
+    col3.metric("Mass Flow Rate", f"{mass_flow_rate * 3600:.1f} kg/h")
+
+    # Tabs Layout
+    tab1, tab2, tab3 = st.tabs(["📉 P-h Diagram", "📊 Sensitivity Analysis", "🧮 State Points Table"])
+
+    with tab1:
+        # 1. Build Saturation Dome Data
+        T_crit_K = PropsSI('Tcrit', refrigerant)
+        P_crit_bar = PropsSI('Pcrit', refrigerant) / 1e5
+        h_crit_kj = PropsSI('H', 'P', P_crit_bar * 1e5, 'Q', 0, refrigerant) / 1000
+        T_min_K = PropsSI('Tmin', refrigerant)
+    
+        # Generate saturation points up close to critical temperature
+        T_sat_range = np.linspace(max(T_min_K + 1, 220), T_crit_K - 0.05, 200)
+    
+        h_fluid = []
+        h_gas = []
+        p_sat = []
+    
+        for T_sat in T_sat_range:
+            try:
+                p_sat.append(PropsSI('P', 'T', T_sat, 'Q', 0, refrigerant) / 1e5) # bar
+                h_fluid.append(PropsSI('H', 'T', T_sat, 'Q', 0, refrigerant) / 1000) # kJ/kg
+                h_gas.append(PropsSI('H', 'T', T_sat, 'Q', 1, refrigerant) / 1000)   # kJ/kg
+            except:
+                pass
+
+        # Append critical point to close the apex of the dome
+        h_fluid.append(h_crit_kj)
+        h_gas.append(h_crit_kj)
+        p_sat_fluid = p_sat + [P_crit_bar]
+        p_sat_gas = p_sat + [P_crit_bar]
+
+        fig = go.Figure()
+
+        # Plot Liquid Saturation Line
+        fig.add_trace(go.Scatter(
+            x=h_fluid, y=p_sat_fluid, mode='lines',
+            name='Saturated Liquid', line=dict(color='blue', width=2)
+        ))
+
+        # Plot Vapor Saturation Line
+        fig.add_trace(go.Scatter(
+            x=h_gas, y=p_sat_gas, mode='lines',
+            name='Saturated Vapor', line=dict(color='red', width=2)
+        ))
+
+        # Cycle States Loop (1 -> 2 -> 3 -> 4 -> 1)
+        cycle_h = [cycle['h1_kj'], cycle['h2_kj'], cycle['h3_kj'], cycle['h4_kj'], cycle['h1_kj']]
+        cycle_p = [cycle['P_evap_bar'], cycle['P_cond_bar'], cycle['P_cond_bar'], cycle['P_evap_bar'], cycle['P_evap_bar']]
+
+        # Plot Cycle Trajectory
+        fig.add_trace(go.Scatter(
+            x=cycle_h, y=cycle_p, mode='lines+markers+text',
+            name='Heat Pump Cycle',
+            text=['State 1 (Inlet)', 'State 2 (Outlet)', 'State 3 (Condenser Out)', 'State 4 (Evap In)', ''],
+            textposition='top right',
+            line=dict(color='black', width=3, dash='solid'),
+            marker=dict(size=8, color='black')
+        ))
+
+        # Chart Configuration
+        fig.update_layout(
+            title=f"Pressure-Enthalpy (P-h) Diagram for {refrigerant}",
+            xaxis_title="Enthalpy h (kJ/kg)",
+            yaxis_title="Pressure P (bar, Log Scale)",
+            yaxis_type="log",
+            height=650,
+            hovermode="closest",
+            legend=dict(x=0.02, y=0.98)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.subheader(f"Sensitivity: Heating COP vs {sens_var}")
+    
+        # Generate range based on selection
+        if sens_var == "Evaporating Temperature":
+            x_vals = np.linspace(-t_cond_c, t_cond_c, 30)
+            cops = [get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
+                    get_cycle_points(refrigerant, x, t_cond_c, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
+                    for x in x_vals if x < t_cond_c]
+            x_label = "Evaporating Temperature (°C)"
+
+        elif sens_var == "Condensing Temperature":
+            x_vals = np.linspace(T_crit_C, T_crit_C + 50, 30) if is_transcritical else np.linspace(0, T_crit_C -1, 30)
+            cops = [get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['q_cond_kj'] /
+                    get_cycle_points(refrigerant, t_evap_c, x, superheat_k, subcooling_k, eta_is)['w_comp_kj'] 
+                    for x in x_vals if x > t_evap_c]
+            x_label = "Condensing Temperature (°C)"
+
+        elif sens_var == "Compressor Efficiency":
+            x_vals = np.linspace(0.5, 0.95, 20)
+            cops = [get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, x)['q_cond_kj'] /
+                    get_cycle_points(refrigerant, t_evap_c, t_cond_c, superheat_k, subcooling_k, x)['w_comp_kj'] 
+                    for x in x_vals]
+            x_label = "Isentropic Efficiency"
+
+        else:  # Superheating
+            x_vals = np.linspace(0, 20, 20)
+            cops = [get_cycle_points(refrigerant, t_evap_c, t_cond_c, x, subcooling_k, eta_is)['q_cond_kj'] /
+                    get_cycle_points(refrigerant, t_evap_c, t_cond_c, x, subcooling_k, eta_is)['w_comp_kj'] 
+                    for x in x_vals]
+            x_label = "Superheating (K)"
+
+        # Plot Sensitivity Line Chart
+        sens_df = pd.DataFrame({x_label: x_vals[:len(cops)], "Heating COP": cops})
+    
+        sens_fig = go.Figure()
+        sens_fig.add_trace(go.Scatter(
+            x=sens_df[x_label], y=sens_df["Heating COP"],
+            mode='lines+markers', line=dict(color='firebrick', width=3)
+        ))
+        sens_fig.update_layout(
+            title=f"Impact of {sens_var} on Coefficient of Performance (COP)",
+            xaxis_title=x_label,
+            yaxis_title="COP (Heating)",
+            height=500
+        )
+    
+        st.plotly_chart(sens_fig, use_container_width=True)
+
+    with tab3:
+        st.subheader("Thermodynamic State Points")
+        state_data = pd.DataFrame({
+            "State Point": ["1 (Compressor In)", "2 (Compressor Out)", "3 (Expansion In)", "4 (Evaporator In)"],
+            "Pressure (bar)": [cycle['P_evap_bar'], cycle['P_cond_bar'], cycle['P_cond_bar'], cycle['P_evap_bar']],
+            "Enthalpy (kJ/kg)": [cycle['h1_kj'], cycle['h2_kj'], cycle['h3_kj'], cycle['h4_kj']]
+        })
+        st.dataframe(state_data.style.format({"Pressure (bar)": "{:.2f}", "Enthalpy (kJ/kg)": "{:.2f}"}))
+
+
+
 
 elif app_mode == "System Monitor (Coming Soon)":
     st.header("📊 Real-Time System Monitoring")
