@@ -113,7 +113,7 @@ if app_mode == "Coaxial BHE":
         # ----------------------------------------------------------------------
         # CAPEX COST CALCULATOR
         # ----------------------------------------------------------------------
-        st.subheader("💰 Itemized CAPEX Estimator")
+        st.subheader("Itemized CAPEX Estimator")
         
         with st.expander("⚙️ Modify Unit Cost Rates", expanded=False):
             cost_col1, cost_col2, cost_col3, cost_col4 = st.columns(4)
