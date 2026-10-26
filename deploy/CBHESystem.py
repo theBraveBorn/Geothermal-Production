@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+import CoolProp.CoolProp as CP
 from plotly.subplots import make_subplots
 from scipy.integrate import quad, cumulative_trapezoid
 from scipy.special import erfc
@@ -30,8 +31,45 @@ class CoaxialBHE:
         self.cw = self.params['cw']  # J/m³K
         self.H = self.params['H']    # Axial length (m)
 
-        self.R_12 = self.params['R_12']
-        self.R_b = self.params['R_b']
+        self.dci = self.params['dci']   # inner diameter of central pipe (mm/1000)
+        self.dco = self.params['dco']  # outer diameter of central pipe
+        self.dai = self.params['dai']  # inner diameter of annlus
+        self.dao = self.params['dao']  # outer diameter of annulus
+        self.db = self.params['db']  # borehole diameter
+        self.kwp_c = self.params['kwp_c'] # conductivity of inner pipe
+        self.kwp_a = self.params['kwp_c'] # conductivity of outer pipe
+        T_in = self.params['T_in'] + 273.15
+        
+        
+        fluid = 'Water'
+        P = 9795 * self.H # assuming pressure gradient of 0.433 psi/ft (9795 Pa/m) [Pa]
+        
+        
+        mu = CP.PropsSI('VISCOSITY', 'T', T_in, 'P', P, fluid) # Dynamic viscosity [Pa·s]
+        pr = CP.PropsSI('PRANDTL', 'T', T_in, 'P', P, fluid) # Prandtl number
+        k = CP.PropsSI('CONDUCTIVITY', 'T', T_in, 'P', P, fluid) # Thermal conductivity [W/m·K]
+        rho = CP.PropsSI('D', 'T', T_in, 'P', P, fluid)        # Density [kg/m³]
+        print(pr, k)
+        
+        self.re_c = (4 * self.w) / (np.pi * self.dci * mu/rho)  # reynolds number, assuming 1cp
+        self.re_a = (4 * self.w) / (np.pi * (self.dai - self.dco) * mu/rho)
+        
+        self.ff_c = (0.790 * np.log(self.re_c) - 1.64) ** - 2 # friction factor central
+        self.ff_a = (0.790 * np.log(self.re_a) - 1.64) ** - 2
+
+        self.nu_c = ((self.ff_c / 8) * (self.re_c - 1000) * pr) / (1 + 12.7 * ((self.ff_c/8)**0.5) * (pr**(2/3) - 1))
+        self.nu_a = ((self.ff_a / 8) * (self.re_a - 1000) * pr) / (1 + 12.7 * (self.ff_a/8)**0.5 * (pr**(2/3) - 1))
+
+        
+        self.hci = (self.nu_c * k) / self.dci # Nusselt number (eqn 21)
+        self.hco = (self.nu_a * k) / (self.dai - self.dco) 
+        self.hai = self.hco
+       
+        # Thermal resistances
+        self.R_12 = (1 / (np.pi * self.hci * self.dci)) + (np.log(self.dco/self.dci)/(2 * np.pi * self.kwp_c)) + (1/(np.pi*self.dco*self.hco))
+        
+        self.R_b = (1/(np.pi*self.dai*self.hai)) + (np.log(self.dao/self.dai)/(2 * np.pi * self.kwp_a)) + (np.log(self.db/self.dao)/(2 * np.pi * self.kwp_a))
+        
         self.N = self.params['N']
 
         # Dimensionless parameters
@@ -49,6 +87,10 @@ class CoaxialBHE:
             
         self.b1 = 0.5 * (-self.a1 - np.sqrt(discriminant))
         self.b2 = 0.5 * (-self.a1 + np.sqrt(discriminant))
+
+
+        return self.R_12, self.R_b
+
 
     def calculate_equivalent_temperatures(self, T_gb_func):
         """Calculate equivalent profiles using precise dimensionless scales"""
@@ -184,6 +226,8 @@ class CBHESystem:
             
         self.fluid_model = CoaxialBHE(params, mode=self.mode) 
         self.soil_model = SoilModel(params, mode=self.mode)
+
+        self.r12, self.rb = self.fluid_model.initialize_model()
         
         self.time_history = []
         self.q_history = [] 
@@ -216,7 +260,7 @@ class CBHESystem:
         T_annulus_fluid = T_f1 if self.fluid_model.delta == 1 else T_f2 
         T_annulus_segmented = np.interp(self.z_nodes, z_fluid, T_annulus_fluid)
         
-        q_current = (T_annulus_segmented - self.T_b_current) / (self.params['R_b'] + self.params['R_12'])
+        q_current = (T_annulus_segmented - self.T_b_current) / (self.rb + self.r12)
         
         self.time_history.append(current_time)
         self.q_history.append(q_current)
