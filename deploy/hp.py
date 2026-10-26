@@ -67,20 +67,17 @@ if app_mode == "Coaxial BHE":
             r2o_mm = st.number_input("Outer Pipe Outer Radius r2o (mm)", 25.0, 180.0, 63.0, step=1.0)
 
         with col3:
-            st.markdown("##### 🏗️ Materials & Resistances")
+            st.markdown("##### 🏗️ Materials")
             inner_mat = st.selectbox(
                 "Inner Pipe Material", 
-                ["Vacuum Insulated Pipe (VIP)", "HDPE (High Density Polyethylene)", "PEX", "Stainless Steel"]
+                ["HDPE (High Density Polyethylene)", "Vacuum Insulated Pipe (VIP)", "PEX", "Stainless Steel"]
             )
-            outer_mat = st.selectbox("Outer Pipe Material", ["Steel Casing", "HDPE Standard", "Composite Fiber"])
+            outer_mat = st.selectbox("Outer Pipe Material", ["HDPE Standard", "Steel Casing", "Composite Fiber"])
             grout_mat = st.selectbox("Grout Type", ["Thermally Enhanced Grout (2.0 W/mK)", "Standard Bentonite (0.8 W/mK)", "Graphite Additive Grout (3.0 W/mK)"])
 
-            # Map materials to default resistances
-            R12_default = 0.25 if "VIP" in inner_mat else (0.08 if "HDPE" in inner_mat else 0.02)
-            Rb_default = 0.08 if "Enhanced" in grout_mat else (0.134 if "Standard" in grout_mat else 0.05)
-
-            R_12_val = st.number_input("Internal Thermal Resistance R12 (m·K/W)", 0.001, 1.0, R12_default, step=0.01)
-            R_b_val = st.number_input("Borehole Thermal Resistance Rb (m·K/W)", 0.001, 1.0, Rb_default, step=0.01)
+            # Map materials to default conductivities
+            kw_c = 0.0007 if "VIP" in inner_mat else (0.46 if "HDPE" in inner_mat else (0.38 if "PEX" in inner_mat else 15)) # [W/mK]
+            kw_a = 15 if "Steel" in outer_mat else (0.46 if "Standard" in outer_mat else 0.4)
 
         # Geometric Integrity Validation
         r1i, r1o = r1i_mm / 1000.0, r1o_mm / 1000.0
@@ -240,6 +237,11 @@ if app_mode == "Coaxial BHE":
             sim_params = {
                 'H': H_val,
                 'N': N_nodes,
+				'dci': 2 * r1i, 
+                'dco': 2 * r1o,
+                'dai': 2 * r2i,
+                'dao': 2 * r2o,
+                'db': D_b_mm / 1000.0,
                 'alpha': alpha_deg,
                 'beta': beta_deg,
                 'x0': 0.0,
@@ -252,8 +254,8 @@ if app_mode == "Coaxial BHE":
                 'T_surface': T_surf_val,
                 'T_infinity': T_surf_val + grad_T_val * 2 * (H_val * np.cos(np.radians(alpha_deg))),
                 'grad_T': grad_T_val,
-                'R_12': R_12_val,
-                'R_b': R_b_val,
+				'kwp_a': kw_a,
+                'kwp_c': kw_c,
                 'R_s': 0.01,
                 'alpha_s': 1.406e-6,
                 'k_s': k_s_val,
