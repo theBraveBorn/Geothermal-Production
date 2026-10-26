@@ -49,9 +49,9 @@ class CoaxialBHE:
         pr = CP.PropsSI('PRANDTL', 'T', T_in, 'P', P, fluid) # Prandtl number
         k = CP.PropsSI('CONDUCTIVITY', 'T', T_in, 'P', P, fluid) # Thermal conductivity [W/m·K]
         rho = CP.PropsSI('D', 'T', T_in, 'P', P, fluid)        # Density [kg/m³]
-        print(pr, k)
         
-        self.re_c = (4 * self.w) / (np.pi * self.dci * mu/rho)  # reynolds number, assuming 1cp
+        
+        self.re_c = (4 * self.w) / (np.pi * self.dci * mu/rho)  # reynolds number
         self.re_a = (4 * self.w) / (np.pi * (self.dai - self.dco) * mu/rho)
         
         self.ff_c = (0.790 * np.log(self.re_c) - 1.64) ** - 2 # friction factor central
@@ -61,7 +61,7 @@ class CoaxialBHE:
         self.nu_a = ((self.ff_a / 8) * (self.re_a - 1000) * pr) / (1 + 12.7 * (self.ff_a/8)**0.5 * (pr**(2/3) - 1))
 
         
-        self.hci = (self.nu_c * k) / self.dci # Nusselt number (eqn 21)
+        self.hci = (self.nu_c * k) / self.dci # Nusselt number
         self.hco = (self.nu_a * k) / (self.dai - self.dco) 
         self.hai = self.hco
        
