@@ -448,12 +448,12 @@ elif app_mode == "Heat Pump Analysis":
                                     min_value=round(T_crit_C)+0.0, 
                                     max_value=round(T_crit_C) + 50.0, 
                                     value=T_crit_C + 25.0, 
-                                    step=1.0)
+                                    step=0.1)
         p_gc = st.sidebar.slider("Compressor Discharge Pressure (bar)",
                                     min_value=round(P_crit_bar) + 0.0, 
                                     max_value=round(P_crit_bar)+50.0, 
                                     value=P_crit_bar+10, 
-                                    step=1.0)
+                                    step=0.1)
         
     else:
         t_gc_in = None
@@ -469,7 +469,7 @@ elif app_mode == "Heat Pump Analysis":
     min_value=-10.0, 
     max_value=round(T_crit_C) - 0.5 if not is_transcritical else round(T_crit_C) + 50.0, 
     value=max(10.0, default_cond), 
-    step=1.0
+    step=0.1
 )
 
     if is_transcritical:
@@ -496,16 +496,16 @@ elif app_mode == "Heat Pump Analysis":
 						  f"- Evaporating at: {t_evap_c:.2f} °C\n"
 						  f"- Source Heat Available: {last_Q_evap:.2f} kW")
     else:
-        t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 1.0)
-        heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=1.0)
+        t_evap_c = st.sidebar.slider("Evaporating Temperature (°C)", -30.0, 20.0, -5.0, 0.1)
+        heating_capacity_kw = st.sidebar.number_input("Heating Demand / Capacity (kW)", value=10.0, step=0.1)
 		
     # Validations
     if t_evap_c >= t_cond_c:
         st.sidebar.error("Evaporating temperature must be lower than Condensing temperature!")
         st.stop()
 
-    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 0.0, 0.5)
-    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 0.0, 0.5)
+    superheat_k = st.sidebar.slider("Superheating (K)", 0.0, 20.0, 0.0, 0.1)
+    subcooling_k = st.sidebar.slider("Subcooling (K)", 0.0, 15.0, 0.0, 0.1)
 
     st.sidebar.markdown("---")
     
